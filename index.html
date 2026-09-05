@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#FBF7F0">
-<title>나린학원 출석부</title>
+<title>나린학원</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -34,9 +34,10 @@
   }
   header h1{font-size:27px; display:flex; align-items:center; gap:10px;}
   header h1 .badge{
-    width:38px; height:38px; border-radius:50%; background:var(--accent);
-    display:inline-flex; align-items:center; justify-content:center; font-size:19px;
-    box-shadow:var(--shadow);
+    width:42px; height:42px; border-radius:12px; background:#fff;
+    display:inline-flex; align-items:center; justify-content:center;
+    box-shadow:var(--shadow); object-fit:contain; padding:3px;
+    border:1.5px solid var(--line);
   }
   .clock{font-size:26px; text-align:center; color:var(--ink);}
   .clock small{font-size:15px; color:var(--muted); margin-left:2px;}
@@ -95,6 +96,10 @@
   }
   .absBtn:hover{color:var(--seal);}
   .clrTag{font-size:11px; color:#B8860B;}
+  .searchInp{width:min(300px,100%);}
+  .stu.extra{border-style:dashed; border-color:var(--line); background:#FCFBF7; box-shadow:none;}
+  .tagExtra{position:absolute; top:8px; left:10px; font-size:11px; color:var(--navy);
+    background:rgba(61,107,158,.08); border-radius:999px; padding:3px 8px;}
 
   .hint{font-size:13.5px; color:var(--muted); margin:16px 4px; line-height:1.8;}
   .empty{padding:70px 0; text-align:center; color:var(--muted); font-size:15.5px; line-height:2;}
@@ -157,9 +162,10 @@
   .lock .btn{width:100%;}
 
   .ovl{position:fixed; inset:0; background:rgba(40,40,35,.45); display:flex;
-    align-items:center; justify-content:center; z-index:50;}
+    align-items:flex-start; justify-content:center; z-index:50; padding:5vh 16px 16px;}
   .modal{background:#fff; border-radius:var(--r); padding:24px 26px; width:min(380px,92vw);
-    box-shadow:0 12px 44px rgba(0,0,0,.22);}
+    box-shadow:0 12px 44px rgba(0,0,0,.22); max-height:85vh; overflow-y:auto;
+    -webkit-overflow-scrolling:touch;}
   .modal p{font-size:15.5px; line-height:1.7; margin-bottom:16px;}
   .modal .mtitle{font-family:'Jua',sans-serif; font-size:19px; margin-bottom:14px;}
   .modal label{display:flex; align-items:center; gap:8px; font-size:14.5px; margin:10px 0;}
@@ -176,7 +182,7 @@
 </head>
 <body>
 <header>
-  <h1><span class="badge">✏️</span>나린학원 출석부</h1>
+  <h1><img class="badge" alt="나린학원" src="data:image/png;base64,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">나린학원</h1>
   <div class="clock" id="clock">--:--</div>
   <span class="date" id="todayLabel"></span>
 </header>
@@ -229,6 +235,7 @@ let roster={slots:[]};
 let attCache={};
 let watched={};
 let view='today', logMonth=todayStr().slice(0,7), logSlot='ALL';
+let todaySearch='', logSearch='';
 let adminUnlocked=false;
 
 setInterval(()=>{
@@ -348,49 +355,72 @@ function drawToday(){
   const s=seoul(); const date=s.date; const wd=s.wd; const nowHM=s.time;
   const day=(attCache[monthKey(date)]||{})[date]||{};
   const slots=sortedSlots().map(sl=>({
-    ...sl, today:sl.students.filter(st=>(st.days||[]).includes(wd))
+    ...sl,
+    today:sl.students,                                          // 보강 대응: 모든 학생을 매일 표시
+    regular:sl.students.filter(st=>(st.days||[]).includes(wd))  // 오늘이 정규수업일인 학생
   })).filter(sl=>sl.today.length);
 
   if(!slots.length){
-    m.innerHTML=`<div class="empty">오늘(${DAYS[wd]}요일) 수업이 있는 학생이 없습니다.</div>`;
+    m.innerHTML='<div class="empty">등록된 학생이 없습니다.<br>「시간대·학생 관리」에서 학생을 추가해 주세요.</div>';
     return;
   }
-  const started=slots.filter(sl=>sl.time<=nowHM);
-  let miss='<div class="missBox"><b>📋 미등원 현황</b><br>';
+  const esc=(todaySearch||'').replace(/"/g,'&quot;');
+  const searchBar=`<div class="row" style="margin-top:0">
+    <input type="text" class="searchInp" placeholder="🔍 학생 이름 검색" value="${esc}"
+      oninput="todaySearch=this.value;filterTodayCards()"></div>`;
+
+  const started=slots.filter(sl=>sl.time<=nowHM && sl.regular.length);
+  let miss='<div class="missBox"><b>📋 미등원 현황</b> <small style="color:var(--muted)">(정규수업 요일 기준)</small><br>';
   if(!started.length){
     miss+='<span class="later">아직 시작된 시간대가 없습니다. 수업 시작 시간이 지나면 여기에 표시됩니다.</span>';
   }else{
     started.forEach(sl=>{
-      const not=sl.today.filter(st=>{const r=day[st.id]||{}; return !r.in && r.status!=='a';});
+      const not=sl.regular.filter(st=>{const r=day[st.id]||{}; return !r.in && r.status!=='a';});
       miss+=`${sl.name} <small style="color:var(--muted)">(${sl.time})</small> — `;
       miss+=not.length?`<span class="miss">${not.map(s=>s.name).join(', ')}</span>`:'<span class="ok">전원 등원 ✓</span>';
       miss+='<br>';
     });
-    const pending=slots.filter(sl=>sl.time>nowHM);
+    const pending=slots.filter(sl=>sl.time>nowHM && sl.regular.length);
     if(pending.length) miss+=`<span class="later">${pending.map(p=>p.name).join(', ')} 시간대는 시작 전입니다.</span>`;
   }
   miss+='</div>';
 
-  let html=miss;
+  let html=searchBar+miss;
   slots.forEach(sl=>{
-    const arrived=sl.today.filter(st=>(day[st.id]||{}).in).length;
+    const regArrived=sl.regular.filter(st=>(day[st.id]||{}).in).length;
+    const extraArrived=sl.today.filter(st=>!(st.days||[]).includes(wd)&&(day[st.id]||{}).in).length;
+    const cnt=`${sl.time} · 정규 ${regArrived}/${sl.regular.length} 등원`+(extraArrived?` · 보강 ${extraArrived}명`:'');
     html+=`<section class="slotSec"><div class="slotHead">
-      <h2>${sl.name}</h2><span class="cnt">${sl.time} · ${arrived}/${sl.today.length} 등원</span></div>
+      <h2>${sl.name}</h2><span class="cnt">${cnt}</span></div>
       <div class="grid">`+sl.today.map(st=>{
         const rec=day[st.id]||{};
+        const isReg=(st.days||[]).includes(wd);
         let cls='stu', seals='', txt='탭하여 등원 기록';
+        const tag=!isReg?'<span class="tagExtra">보강</span>':'';
         if(rec.status==='a'){cls+=' absent'; txt='결석';}
         else if(rec.out){seals='<span class="seal">출석</span><span class="seal out">하원</span>'; txt='등원 '+rec.in+' · 하원 '+rec.out;}
         else if(rec.in){seals='<span class="seal">출석</span>'; txt='등원 '+rec.in+'<br>탭하면 하원 기록';}
-        else{cls+=' notyet';}
-        return `<div class="${cls}" onclick="tapStudent('${st.id}')">${seals}
+        else if(isReg){cls+=' notyet';}
+        else{cls+=' extra'; txt='보강·추가 등원 시 탭';}
+        return `<div class="${cls}" data-name="${st.name}" onclick="tapStudent('${st.id}')">${tag}${seals}
           <div class="nm">${st.name}</div><div class="st">${txt}</div>
           <button class="absBtn" onclick="event.stopPropagation();toggleAbsent('${st.id}')">${rec.status==='a'?'결석 취소':'결석'}</button>
         </div>`;
       }).join('')+'</div></section>';
   });
-  html+='<p class="hint">카드를 탭하면 등원 → 하원 순으로 시간이 기록됩니다. 다른 기기의 기록은 실시간으로 반영됩니다.</p>';
+  html+='<p class="hint">카드를 탭하면 등원 → 하원 순으로 시간이 기록됩니다. 점선 카드는 오늘이 정규수업일이 아닌 학생(보강 등)으로, 출석을 찍으면 「보강」으로 집계되고 안 와도 미등원에 뜨지 않습니다.</p>';
   m.innerHTML=html;
+  filterTodayCards();
+}
+function filterTodayCards(){
+  const q=(todaySearch||'').trim();
+  document.querySelectorAll('#main .stu').forEach(el=>{
+    el.style.display=(!q||(el.dataset.name||'').includes(q))?'':'none';
+  });
+  document.querySelectorAll('#main .slotSec').forEach(sec=>{
+    const any=[...sec.querySelectorAll('.stu')].some(el=>el.style.display!=='none');
+    sec.style.display=any?'':'none';
+  });
 }
 function renderToday(){
   watchMonth(monthKey(todayStr()));
@@ -486,6 +516,7 @@ async function renderLog(){
   const m=$('#main');
   if(!roster.slots.length){m.innerHTML='<div class="empty">등록된 시간대가 없습니다.</div>';return;}
   if(logSlot!=='ALL' && !slotById(logSlot)) logSlot='ALL';
+  const escL=(logSearch||'').replace(/"/g,'&quot;');
   let html=`<div class="row">
     <input type="month" value="${logMonth}" onchange="logMonth=this.value;renderLog()">
     <div class="slotTabs">
@@ -496,9 +527,23 @@ async function renderLog(){
     <button class="btn ghost" onclick="exportCSV()">CSV 내보내기</button>
     <button class="btn ghost" onclick="changePin()">비밀번호 변경</button>
     <button class="btn ghost" onclick="doLogout()">계정 로그아웃</button>
+  </div>
+  <div class="row">
+    <input type="text" class="searchInp" placeholder="🔍 학생 이름 검색" value="${escL}"
+      oninput="logSearch=this.value;buildLogTable()">
   </div>`;
-  const cols=logStudents();
-  const att=await fetchMonth('att-'+logMonth);
+  await fetchMonth('att-'+logMonth);
+  m.innerHTML=html+'<div id="logTblWrap"></div>';
+  buildLogTable();
+}
+function buildLogTable(){
+  const wrap=$('#logTblWrap'); if(!wrap)return;
+  const q=(logSearch||'').trim();
+  const cols=logStudents().filter(c=>!q||c.st.name.includes(q));
+  const att=attCache['att-'+logMonth]||{};
+  if(!cols.length){
+    wrap.innerHTML='<div class="empty">검색된 학생이 없습니다.</div>'; return;
+  }
   const [y,mo]=logMonth.split('-').map(Number);
   const dim=new Date(y,mo,0).getDate();
   const activeDates=[];
@@ -507,16 +552,16 @@ async function renderLog(){
     if(att[ds] && cols.some(c=>att[ds][c.st.id])) activeDates.push(ds);
   }
   if(!activeDates.length){
-    m.innerHTML=html+'<div class="empty">이 달에는 기록이 없습니다.</div>'; return;
+    wrap.innerHTML='<div class="empty">이 달에는 기록이 없습니다.</div>'; return;
   }
   let thead;
-  if(logSlot==='ALL'){
+  if(logSlot==='ALL' && !q){
     const slots=sortedSlots().filter(sl=>sl.students.length);
     thead='<thead><tr><th rowspan="2">날짜</th>'+
       slots.map(sl=>`<th colspan="${sl.students.length}">${sl.name}</th>`).join('')+'</tr><tr>'+
       cols.map(c=>'<th>'+c.st.name+'</th>').join('')+'</tr></thead>';
   }else{
-    thead='<thead><tr><th>날짜</th>'+cols.map(c=>'<th>'+c.st.name+'</th>').join('')+'</tr></thead>';
+    thead='<thead><tr><th>날짜</th>'+cols.map(c=>'<th>'+c.st.name+(logSlot==='ALL'?' <small style="color:var(--muted)">'+c.sl.name+'</small>':'')+'</th>').join('')+'</tr></thead>';
   }
   let tbl='<div class="tblWrap"><table>'+thead+'<tbody>';
   const cnt={};
@@ -537,7 +582,7 @@ async function renderLog(){
   tbl+='</tbody><tfoot><tr><td>출석일</td>'+cols.map(c=>'<td>'+(cnt[c.st.id]||0)+'</td>').join('')+'</tr></tfoot></table></div>';
   tbl+=`<p class="legend">○ 출석 (칸에 마우스를 올리면 등·하원 시간) · ✕ 결석 · <span class="clrTag">✂ 지움기록</span>은 학생이 카드를 세 번 탭해 기록을 지운 적이 있다는 표시입니다.<br>
   칸을 누르면 등·하원 시간과 결석 여부를 직접 수정할 수 있습니다.</p>`;
-  m.innerHTML=html+tbl;
+  wrap.innerHTML=tbl;
 }
 async function doLogout(){
   if(await uiConfirm('이 기기에서 학원 계정을 로그아웃할까요?')){
@@ -582,7 +627,8 @@ function openRecEdit(ds,sid){
   };
 }
 async function exportCSV(){
-  const cols=logStudents();
+  const q=(logSearch||'').trim();
+  const cols=logStudents().filter(c=>!q||c.st.name.includes(q));
   const att=await fetchMonth('att-'+logMonth);
   const [y,mo]=logMonth.split('-').map(Number);
   const dim=new Date(y,mo,0).getDate();
@@ -622,16 +668,18 @@ function renderManage(){
       <span class="sp"></span>
       <button class="btn ghost small" onclick="editSlot('${sl.id}')">이름·시간 수정</button>
       <button class="btn danger small" onclick="delSlot('${sl.id}')">삭제</button></h3>
-    <div>${sl.students.map(st=>`<span class="chip">${st.name}<small>${fmtDays(st.days||[])}</small>
+    <div>${sl.students.map(st=>`<span class="chip">${st.name}<small>${fmtDays(st.days||[])||'자유'}</small>
       <button onclick="delStudent('${sl.id}','${st.id}')">✕</button></span>`).join('')||'<span class="hint">학생이 없습니다.</span>'}</div>
     <div class="row">
       <input type="text" id="ns-${sl.id}" placeholder="학생 이름 (쉼표로 여러 명)">
+      <span style="font-size:13px;color:var(--muted)">정규요일:</span>
       <div class="dayPick" id="dp-${sl.id}">${[1,2,3,4,5,6,0].map(d=>
         `<button class="${newDays.includes(d)?'on':''}" onclick="toggleDay('${sl.id}',${d},this)">${DAYS[d]}</button>`).join('')}</div>
       <button class="btn ghost" onclick="addStudents('${sl.id}')">학생 추가</button>
     </div>
   </div>`).join('');
-  html+=`<p class="hint">요일 버튼을 눌러 그 학생이 수업 오는 요일을 고른 뒤 추가하세요. 「오늘 출석」에는 해당 요일 학생만 나타납니다.<br>
+  html+=`<p class="hint">요일 버튼은 <b>정규수업 요일</b>입니다. 모든 학생이 매일 「오늘 출석」에 나타나 보강 출석도 찍을 수 있고, 정규수업 요일에 안 온 학생만 미등원 현황에 표시됩니다.<br>
+  요일을 하나도 고르지 않으면 '자유'로 등록되어 미등원 집계 없이 매일 출석만 찍을 수 있습니다.<br>
   다른 태블릿·컴퓨터에서도 이 주소로 접속해 같은 학원 계정으로 로그인하면 실시간으로 연동됩니다.</p>`;
   m.innerHTML=html;
 }
@@ -673,7 +721,7 @@ async function delSlot(id){
 async function addStudents(slId){
   const inp=$('#ns-'+slId); const names=inp.value.split(',').map(s=>s.trim()).filter(Boolean);
   if(!names.length)return;
-  const days=newDays.length?newDays.slice():[1,2,3,4,5];
+  const days=newDays.slice();   // 요일을 하나도 안 고르면 '자유'(정규수업일 없음)로 등록됨
   const sl=slotById(slId);
   names.forEach((n,i)=>sl.students.push({id:'s'+Date.now()+'_'+i,name:n,days:days}));
   await saveRoster(); renderManage();
