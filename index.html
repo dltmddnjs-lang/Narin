@@ -240,7 +240,9 @@ function matchStudent(st,sl,qRaw){
   if((st.school||'').includes(q))return true;
   const dq=q.replace(/\D/g,'');
   if(dq && (st.phone||'').includes(dq))return true;
+  if((st.grade||'').includes(q))return true;
   if(sl && (sl.name||'').includes(q))return true;
+  if(sl && (sl.time||'').includes(q))return true;
   return false;
 }
 function hmToMin(hm){const p=String(hm||'0:0').split(':').map(Number);return p[0]*60+p[1];}
@@ -388,8 +390,8 @@ function drawToday(){
     <button class="btn ${showAllToday?'':'ghost'}" onclick="toggleAllToday()">${showAllToday?'👁 전체 보기 해제':'👁 관리자 전체 보기'}</button>
   </div>`;
 
-  const started=slots.filter(sl=>sl.time<=nowHM && sl.regular.length);
-  let miss='<div class="missBox"><b>📋 미등원 현황</b> <small style="color:var(--muted)">(정규수업 요일 기준)</small><br>';
+  const started=slots.filter(sl=>{const dm=nowMin-hmToMin(sl.time); return dm>=0&&dm<=60&&sl.regular.length;});
+  let miss='<div class="missBox"><b>📋 미등원 현황</b> <small style="color:var(--muted)">(정규 요일 기준 · 현재 시간 앞뒤 1시간)</small><br>';
   if(!started.length){
     miss+='<span class="later">아직 시작된 시간대가 없습니다. 수업 시작 시간이 지나면 여기에 표시됩니다.</span>';
   }else{
@@ -399,7 +401,7 @@ function drawToday(){
       miss+=not.length?`<span class="miss">${not.map(s=>s.name).join(', ')}</span>`:'<span class="ok">전원 등원 ✓</span>';
       miss+='<br>';
     });
-    const pending=slots.filter(sl=>sl.time>nowHM && sl.regular.length);
+    const pending=slots.filter(sl=>{const dm=hmToMin(sl.time)-nowMin; return dm>0&&dm<=60&&sl.regular.length;});
     if(pending.length) miss+=`<span class="later">${pending.map(p=>p.name).join(', ')} 시간대는 시작 전입니다.</span>`;
   }
   miss+='</div>';
@@ -418,12 +420,12 @@ function drawToday(){
         const isReg=(st.days||[]).includes(wd);
         let cls='stu', seals='', txt='탭하여 등원 기록';
         const tag=!isReg?'<span class="tagExtra">보강</span>':'';
-        if(rec.status==='a'){cls+=' absent'; txt='결석';}
+        if(rec.status==='a'){cls+=' absent'; txt='결석'+(rec.reason?'<br>'+rec.reason:'');}
         else if(rec.out){seals='<span class="seal">출석</span><span class="seal out">하원</span>'; txt='등원 '+rec.in+' · 하원 '+rec.out;}
         else if(rec.in){seals='<span class="seal">출석</span>'; txt='등원 '+rec.in+'<br>탭하면 하원 기록';}
         else if(isReg){cls+=' notyet';}
         else{cls+=' extra'; txt='보강·추가 등원 시 탭';}
-        return `<div class="${cls}" data-name="${st.name}" data-cho="${chosung(st.name)}" data-school="${st.school||''}" data-phone="${st.phone||''}" data-slot="${sl.name}" data-win="${winOn?'1':'0'}" onclick="tapStudent('${st.id}')">${tag}${seals}
+        return `<div class="${cls}" data-name="${st.name}" data-cho="${chosung(st.name)}" data-school="${st.school||''}" data-phone="${st.phone||''}" data-slot="${sl.name}" data-time="${sl.time}" data-grade="${st.grade||''}" data-win="${winOn?'1':'0'}" onclick="tapStudent('${st.id}')">${tag}${seals}
           <div class="nm">${st.name}</div><div class="st">${txt}</div>
           <button class="absBtn" onclick="event.stopPropagation();toggleAbsent('${st.id}')">${rec.status==='a'?'결석 취소':'결석'}</button>
         </div>`;
@@ -440,6 +442,8 @@ function cardMatches(el,q){
   const dq=q.replace(/\D/g,'');
   if(dq && (el.dataset.phone||'').includes(dq))return true;
   if((el.dataset.slot||'').includes(q))return true;
+  if((el.dataset.time||'').includes(q))return true;
+  if((el.dataset.grade||'')!=='' && el.dataset.grade.includes(q))return true;
   return false;
 }
 function filterTodayCards(){
@@ -477,10 +481,24 @@ async function toggleAbsent(sid){
   const rec=((attCache[monthKey(date)]||{})[date]||{})[sid]||{};
   if(rec.status==='a'){
     applyRecAt(date,sid, rec.cleared?{cleared:true}:null);
-  }else{
-    const nr={status:'a'}; if(rec.cleared)nr.cleared=true;
-    applyRecAt(date,sid,nr);
+    return;
   }
+  const f=findStudent(sid);
+  $('#modalHost').innerHTML=`<div class="ovl"><div class="modal">
+    <div class="mtitle">${f?f.st.name:''} 결석 처리</div>
+    <input type="text" id="absRs" placeholder="결석 사유 (선택, 예: 감기)" style="width:100%"
+      onkeydown="if(event.key==='Enter')$('#absOk').click()">
+    <div class="mrow"><button class="btn ghost" id="absNo">취소</button>
+    <button class="btn" id="absOk">결석 처리</button></div></div></div>`;
+  setTimeout(()=>$('#absRs')&&$('#absRs').focus(),50);
+  $('#absNo').onclick=()=>$('#modalHost').innerHTML='';
+  $('#absOk').onclick=()=>{
+    const nr={status:'a'};
+    const rs=$('#absRs').value.trim(); if(rs)nr.reason=rs;
+    if(rec.cleared)nr.cleared=true;
+    $('#modalHost').innerHTML='';
+    applyRecAt(date,sid,nr);
+  };
 }
 
 async function toggleAllToday(){
@@ -630,7 +648,7 @@ function buildLogTable(){
       const click=`onclick="openRecEdit('${ds}','${sid}')"`;
       const clr=r&&r.cleared?'<br><span class="clrTag">✂ 지움기록</span>':'';
       if(!r) return `<td class="e" ${click}></td>`;
-      if(r.status==='a') return `<td class="a" ${click}>✕${clr}</td>`;
+      if(r.status==='a') return `<td class="a" ${click} title="${r.reason||''}">✕${r.reason?'<br><small style="font-size:10px">'+r.reason+'</small>':''}${clr}</td>`;
       if(r.in){cnt[sid]=(cnt[sid]||0)+1;
         return `<td class="p" ${click} title="${r.in||''}${r.out?' ~ '+r.out:''}">○${clr}</td>`;}
       return `<td class="e" ${click}>${r.cleared?'<span class="clrTag">✂ 지움기록</span>':''}</td>`;
@@ -657,6 +675,7 @@ function openRecEdit(ds,sid){
     <label><span class="lb">등원</span><input type="time" id="edIn" value="${r.in||''}"></label>
     <label><span class="lb">하원</span><input type="time" id="edOut" value="${r.out||''}"></label>
     <label><input type="checkbox" id="edAbs" ${r.status==='a'?'checked':''}> 결석 처리</label>
+    <label><span class="lb">사유</span><input type="text" id="edRs" value="${r.reason||''}" placeholder="결석 사유 (선택)"></label>
     <label><input type="checkbox" id="edClr" ${r.cleared?'checked':''}> ✂ 지움기록 표시 (학생이 기록을 지운 흔적)</label>
     <div class="mrow">
       <button class="btn danger" id="edDel">기록 완전 삭제</button>
@@ -672,7 +691,7 @@ function openRecEdit(ds,sid){
   };
   $('#edOk').onclick=async()=>{
     const nr={};
-    if($('#edAbs').checked) nr.status='a';
+    if($('#edAbs').checked){nr.status='a'; const rs=$('#edRs').value.trim(); if(rs)nr.reason=rs;}
     else{
       const i=$('#edIn').value, o=$('#edOut').value;
       if(i) nr.in=i;
@@ -696,7 +715,7 @@ async function exportCSV(){
     rows.push([ds,...cols.map(c=>{
       const r=day[c.st.id]; if(!r)return'';
       let t='';
-      if(r.status==='a')t='결석';
+      if(r.status==='a')t='결석'+(r.reason?'('+r.reason+')':'');
       else if(r.in)t='등원 '+r.in+(r.out?' / 하원 '+r.out:'');
       if(r.cleared)t+=(t?' ':'')+'(지움기록)';
       return t;
@@ -725,11 +744,12 @@ function renderManage(){
       <span class="sp"></span>
       <button class="btn ghost small" onclick="editSlot('${sl.id}')">이름·시간 수정</button>
       <button class="btn danger small" onclick="delSlot('${sl.id}')">삭제</button></h3>
-    <div>${sl.students.map(st=>`<span class="chip" style="cursor:pointer" onclick="editStudent('${sl.id}','${st.id}')">${st.name}<small>${fmtDays(st.days||[])||'자유'}${st.school?' · '+st.school:''}${st.phone?' · '+st.phone:''}</small>
+    <div>${sl.students.map(st=>`<span class="chip" style="cursor:pointer" onclick="editStudent('${sl.id}','${st.id}')">${st.name}<small>${fmtDays(st.days||[])||'자유'}${st.school?' · '+st.school:''}${st.grade?' · '+st.grade:''}${st.phone?' · '+st.phone:''}</small>
       <button onclick="event.stopPropagation();delStudent('${sl.id}','${st.id}')">✕</button></span>`).join('')||'<span class="hint">학생이 없습니다.</span>'}</div>
     <div class="row">
       <input type="text" id="ns-${sl.id}" placeholder="학생 이름 (쉼표로 여러 명)" style="width:200px">
       <input type="text" id="sc-${sl.id}" placeholder="학교 (선택)" style="width:110px">
+      <input type="text" id="gr-${sl.id}" placeholder="학년 (선택)" style="width:100px">
       <input type="text" id="ph-${sl.id}" placeholder="휴대폰 뒷번호 (선택)" inputmode="numeric" style="width:150px">
       <span style="font-size:13px;color:var(--muted)">정규요일:</span>
       <div class="dayPick" id="dp-${sl.id}">${[1,2,3,4,5,6,0].map(d=>
@@ -782,11 +802,13 @@ async function addStudents(slId){
   if(!names.length)return;
   const days=newDays.slice();   // 요일을 하나도 안 고르면 '자유'(정규수업일 없음)로 등록됨
   const school=($('#sc-'+slId).value||'').trim();
+  const grade=($('#gr-'+slId).value||'').trim();
   const phone=($('#ph-'+slId).value||'').replace(/\D/g,'');
   const sl=slotById(slId);
   names.forEach((n,i)=>{
     const st={id:'s'+Date.now()+'_'+i,name:n,days:days};
     if(school)st.school=school;
+    if(grade)st.grade=grade;
     if(phone)st.phone=phone;
     sl.students.push(st);
   });
@@ -801,6 +823,7 @@ function editStudent(slId,sid){
     <div class="mtitle">학생 정보 수정</div>
     <label><span class="lb">이름</span><input type="text" id="edStNm" value="${st.name}"></label>
     <label><span class="lb">학교</span><input type="text" id="edStSc" value="${st.school||''}" placeholder="선택"></label>
+    <label><span class="lb">학년</span><input type="text" id="edStGr" value="${st.grade||''}" placeholder="선택 (예: 중1)"></label>
     <label><span class="lb">뒷번호</span><input type="text" id="edStPh" value="${st.phone||''}" placeholder="선택" inputmode="numeric"></label>
     <label><span class="lb">정규요일</span></label>
     <div class="dayPick" id="edDp">${dayBtns}</div>
@@ -812,6 +835,7 @@ function editStudent(slId,sid){
     if(!nm){uiAlert('이름을 입력해 주세요.');return;}
     st.name=nm;
     const sc=$('#edStSc').value.trim(); if(sc)st.school=sc; else delete st.school;
+    const gr=$('#edStGr').value.trim(); if(gr)st.grade=gr; else delete st.grade;
     const ph=$('#edStPh').value.replace(/\D/g,''); if(ph)st.phone=ph; else delete st.phone;
     const map={'월':1,'화':2,'수':3,'목':4,'금':5,'토':6,'일':0};
     st.days=[...document.querySelectorAll('#edDp button.on')].map(b=>map[b.textContent]);
