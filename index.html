@@ -255,6 +255,7 @@ let watched={};
 let view='today', logMonth=todayStr().slice(0,7), logSlot='ALL';
 let todaySearch='', logSearch='';
 let showAllToday=false;   // 관리자 전체 보기 (15분 창 무시)
+let slotEditMode=false; const selSlots=new Set();   // 시간대 편집(다중 선택 삭제)
 let adminUnlocked=false;
 
 setInterval(()=>{
@@ -758,8 +759,15 @@ function renderManage(){
       <input type="time" id="newSlotTime" value="19:00">
       <button class="btn" onclick="addSlot()">시간대 추가</button>
     </div></div>`;
-  html+=sortedSlots().map(sl=>`<div class="mgBox">
-    <h3>${sl.name} <small style="color:var(--muted);font-family:'Gowun Dodum'">${sl.time}</small>
+  html+=`<div class="row" style="margin:4px 0 14px">`+(slotEditMode
+    ?`<button class="btn ghost small" onclick="selAllSlots(true)">모두 선택</button>
+      <button class="btn ghost small" onclick="selAllSlots(false)">선택 해제</button>
+      <button class="btn danger small" id="delSelBtn" onclick="delSelectedSlots()">선택한 시간대 삭제 (${selSlots.size})</button>
+      <button class="btn small" onclick="slotEditMode=false;selSlots.clear();renderManage()">편집 종료</button>`
+    :`<button class="btn ghost small" onclick="slotEditMode=true;selSlots.clear();renderManage()">🗂 시간대 편집 — 여러 개 선택해서 삭제</button>`)
+    +`</div>`;
+  html+=sortedSlots().map(sl=>`<div class="mgBox"${slotEditMode&&selSlots.has(sl.id)?' style="border:2px solid var(--seal)"':''}>
+    <h3>${slotEditMode?`<input type="checkbox" style="width:22px;height:22px;accent-color:var(--seal)" ${selSlots.has(sl.id)?'checked':''} onchange="toggleSelSlot('${sl.id}',this.checked)">`:''}${sl.name} <small style="color:var(--muted);font-family:'Gowun Dodum'">${sl.time}</small>
       <span class="sp"></span>
       <button class="btn ghost small" onclick="editSlot('${sl.id}')">이름·시간 수정</button>
       <button class="btn danger small" onclick="delSlot('${sl.id}')">삭제</button></h3>
@@ -832,6 +840,27 @@ async function addStudents(slId){
     sl.students.push(st);
   });
   await saveRoster(); renderManage();
+}
+function toggleSelSlot(id,chk){
+  if(chk)selSlots.add(id); else selSlots.delete(id);
+  const b=$('#delSelBtn'); if(b)b.textContent='선택한 시간대 삭제 ('+selSlots.size+')';
+}
+function selAllSlots(all){
+  selSlots.clear();
+  if(all)roster.slots.forEach(sl=>selSlots.add(sl.id));
+  renderManage();
+}
+async function delSelectedSlots(){
+  if(!selSlots.size){uiAlert('삭제할 시간대를 먼저 선택해 주세요.');return;}
+  const targets=roster.slots.filter(sl=>selSlots.has(sl.id));
+  const listHtml=targets.map(sl=>sl.name+' <small style="color:var(--muted)">('+sl.time+' · 학생 '+sl.students.length+'명)</small>').join('<br>');
+  const ok=await uiConfirm('아래 <b>'+targets.length+'개</b> 시간대를 삭제할까요?<br><br>'+listHtml
+    +'<br><br><small style="color:var(--muted)">소속 학생 명단도 함께 삭제되지만, 지난 출석 기록 자체는 남습니다.</small>');
+  if(!ok)return;
+  roster.slots=roster.slots.filter(sl=>!selSlots.has(sl.id));
+  selSlots.clear(); slotEditMode=false;
+  await saveRoster(); renderManage();
+  uiAlert(targets.length+'개 시간대를 삭제했습니다.');
 }
 async function bulkDeleteStudents(){
   const inp=$('#bulkDel'); if(!inp)return;
