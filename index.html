@@ -744,6 +744,14 @@ function renderManage(){
     정규요일은 "월수금"처럼 붙여 쓰고, 비우면 자유 학생이 됩니다. 명단에 없는 시간대는 자동 생성됩니다(시간 미입력 시 19:00).<br>
     같은 시간대에 같은 이름이 이미 있으면 건너뛰므로, 수정된 명단을 다시 올려도 중복 등록되지 않습니다. 뒷번호 열은 텍스트 서식을 권장합니다(앞자리 0 보존).</p>
   </div>
+  <div class="mgBox"><h3>🧹 학생 일괄 삭제</h3>
+    <div class="row">
+      <input type="text" id="bulkDel" placeholder="삭제할 학생 이름 (쉼표로 여러 명)" style="width:280px"
+        onkeydown="if(event.key==='Enter')bulkDeleteStudents()">
+      <button class="btn danger" onclick="bulkDeleteStudents()">한번에 삭제</button>
+    </div>
+    <p class="hint" style="margin:6px 2px 0">모든 시간대에서 해당 이름을 찾아 지웁니다. 삭제 전에 누구를 지울지 확인 창이 뜨고, 지난 출석 기록 자체는 남습니다.</p>
+  </div>
   <div class="mgBox"><h3>➕ 새 시간대 추가</h3>
     <div class="row">
       <input type="text" id="newSlotName" placeholder="예: 7시반">
@@ -824,6 +832,34 @@ async function addStudents(slId){
     sl.students.push(st);
   });
   await saveRoster(); renderManage();
+}
+async function bulkDeleteStudents(){
+  const inp=$('#bulkDel'); if(!inp)return;
+  const names=inp.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!names.length){uiAlert('삭제할 학생 이름을 입력해 주세요.');return;}
+  const hits=[]; const notFound=[];
+  names.forEach(nm=>{
+    let found=false;
+    roster.slots.forEach(sl=>sl.students.forEach(st=>{
+      if(st.name===nm){hits.push({sl,st}); found=true;}
+    }));
+    if(!found)notFound.push(nm);
+  });
+  if(!hits.length){
+    uiAlert('입력한 이름의 학생을 찾지 못했습니다.'+(notFound.length?'<br><small style="color:var(--muted)">'+notFound.join(', ')+'</small>':''));
+    return;
+  }
+  const listHtml=hits.map(x=>x.st.name+' <small style="color:var(--muted)">('+x.sl.name+(x.st.school?' · '+x.st.school:'')+')</small>').join('<br>');
+  const ok=await uiConfirm('아래 <b>'+hits.length+'명</b>을 삭제할까요?<br><br>'+listHtml
+    +(notFound.length?'<br><br><small style="color:var(--muted)">찾지 못함: '+notFound.join(', ')+'</small>':'')
+    +'<br><small style="color:var(--muted)">지난 출석 기록 자체는 남습니다.</small>');
+  if(!ok)return;
+  hits.forEach(x=>{
+    x.sl.students=x.sl.students.filter(s=>s.id!==x.st.id);
+  });
+  inp.value='';
+  await saveRoster(); renderManage();
+  uiAlert(hits.length+'명을 삭제했습니다.');
 }
 function downloadTemplate(){
   const rows=[
