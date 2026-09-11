@@ -660,10 +660,17 @@ async function exportCSV(){
   const wb=XLSX.utils.book_new();
   const ws1=XLSX.utils.aoa_to_sheet(rows1);
   const ws2=XLSX.utils.aoa_to_sheet(rows2);
-  /* 열 너비 자동 */
-  const colW1=[{wch:9},{wch:4},...cols.flatMap(()=>[{wch:7},{wch:7},{wch:6},{wch:10}])];
-  ws1['!cols']=colW1;
-  ws2['!cols']=[{wch:12},{wch:12},{wch:8},{wch:8},{wch:8},{wch:6},{wch:12}];
+  /* ── 열 너비: 실제 내용 최대 길이 기준으로 자동 계산 ── */
+  function colWidths(aoa){
+    if(!aoa.length)return[];
+    return aoa[0].map((_,ci)=>({
+      wch:Math.min(40, Math.max(8,
+        ...aoa.map(row=>String(row[ci]||'').replace(/[\u3131-\uD7A3]/g,'aa').length)
+      ))
+    }));
+  }
+  ws1['!cols']=colWidths(rows1);
+  ws2['!cols']=colWidths(rows2);
   XLSX.utils.book_append_sheet(wb,ws1,'일별 출석');
   XLSX.utils.book_append_sheet(wb,ws2,'학생별 집계');
   XLSX.writeFile(wb,'나린학원출석부_'+logMonth+'.xlsx');
