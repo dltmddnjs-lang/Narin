@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -612,72 +613,118 @@ function editRec(ds,sid){
   };
 }
 
-/* ──────────────── CSV 내보내기 ──────────────── */
+/* ──────────────── 엑셀 내보내기 (ExcelJS — 틀 고정 지원) ──────────────── */
 async function exportCSV(){
   const q=(logSearch||'').trim();
   const cols=roster.students.filter(st=>matchSt(st,q)).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   const att=await fetchMonth('att-'+logMonth);
   const[y,mo]=logMonth.split('-').map(Number);
   const dim=new Date(y,mo,0).getDate();
-
-  /* ── 시트 1: 일별 출석 기록 ── */
-  const rows1=[];
-  const hdr1=['날짜','요일',...cols.flatMap(st=>[st.name+'_등원',st.name+'_하원',st.name+'_구분',st.name+'_사유'])];
-  rows1.push(hdr1);
-  for(let d=1;d<=dim;d++){
-    const ds=logMonth+'-'+pad(d);const day=att[ds]||{};
-    if(!cols.some(st=>day[st.id]))continue;
-    const wd=DAYS[new Date(ds+'T12:00:00').getDay()];
-    const row=[ds.slice(5).replace('-','/'),wd];
-    cols.forEach(st=>{
-      const r=day[st.id];
-      if(!r){row.push('','','','');return;}
-      if(r.status==='a'){row.push('','','결석',r.reason||'');return;}
-      row.push(r.in||'',r.out||'',r.mk?'보강':'정규',r.cleared?'(지움기록)':'');
-    });
-    rows1.push(row);
-  }
-
-  /* ── 시트 2: 학생별 출석 집계 ── */
-  const rows2=[['이름','학교','학년','정규 출석','보강 출석','결석','기록 없는 수업일']];
   const allDates=[];
-  for(let d=1;d<=dim;d++){const ds=logMonth+'-'+pad(d);if(att[ds])allDates.push(ds);}
-  cols.forEach(st=>{
-    let reg=0,mk=0,abs=0,none=0;
-    allDates.forEach(ds=>{
-      const wd=new Date(ds+'T12:00:00').getDay();
-      const isSchDay=!!(st.sched||{})[wd];
-      const r=(att[ds]||{})[st.id];
-      if(!r){if(isSchDay)none++;return;}
-      if(r.status==='a')abs++;
-      else if(r.in&&r.mk)mk++;
-      else if(r.in)reg++;
-    });
-    rows2.push([st.name,st.school||'',st.grade||'',reg,mk,abs,none]);
+  for(let d=1;d<=dim;d++){const ds=logMonth+'-'+pad(d);if(att[ds]&&cols.some(st=>att[ds][st.id]))allDates.push(ds);}
+
+  const wb=new ExcelJS.Workbook();
+  wb.creator='나린학원';wb.created=new Date();
+
+  /* ── 공통: 너비 계산 ── */
+  function wch(str){return Math.min(40,Math.max(8,[...String(str||'')].reduce((s,c)=>s+(c.charCodeAt(0)>127?2:1),0)));}
+
+  /* ════════ 시트 1: 일별 출석 ════════ */
+  const ws1=wb.addWorksheet('일별 출석');
+  const HDR_FILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7F4EC'}};
+  const HDR_FONT={bold:true,size:11};
+  const BORDER={style:'thin',color:{argb:'FFEEE9DE'}};
+  const BD={top:BORDER,left:BORDER,bottom:BORDER,right:BORDER};
+
+  /* 1행: 학생 이름 (4열씩 병합) */
+  const nameRow=['날짜','요일',...cols.flatMap(st=>[st.name,'','',''])];
+  const r1=ws1.addRow(nameRow);
+  r1.eachCell(c=>{c.fill=HDR_FILL;c.font=HDR_FONT;c.border=BD;c.alignment={horizontal:'center',vertical:'middle'};});
+  cols.forEach((st,i)=>{
+    const start=3+i*4,end=start+3;
+    ws1.mergeCells(1,start,1,end);
+  });
+  r1.height=22;
+
+  /* 2행: 등원/하원/구분/사유 */
+  const subHdr=['날짜','요일',...cols.flatMap(()=>['등원','하원','구분','사유'])];
+  const r2=ws1.addRow(subHdr);
+  r2.eachCell(c=>{c.fill=HDR_FILL;c.font={bold:true,size:10};c.border=BD;c.alignment={horizontal:'center',vertical:'middle'};});
+  ws1.mergeCells(1,1,2,1);ws1.mergeCells(1,2,2,2);  // 날짜·요일 1~2행 병합
+  r2.height=20;
+
+  /* 틀 고정: 2행·2열 */
+  ws1.views=[{state:'frozen',xSplit:2,ySplit:2,activeCell:'C3'}];
+
+  /* 열 너비 */
+  ws1.getColumn(1).width=10;ws1.getColumn(2).width=5;
+  cols.forEach((st,i)=>{
+    [0,1].forEach(j=>{ws1.getColumn(3+i*4+j).width=8;});
+    ws1.getColumn(3+i*4+2).width=7;
+    ws1.getColumn(3+i*4+3).width=Math.max(8,wch(st.name)+2);
   });
 
-  /* 워크북 만들기 */
-  const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.aoa_to_sheet(rows1);
-  const ws2=XLSX.utils.aoa_to_sheet(rows2);
-  /* ── 열 너비: 실제 내용 최대 길이 기준으로 자동 계산 ── */
-  function colWidths(aoa){
-    if(!aoa.length)return[];
-    return aoa[0].map((_,ci)=>({
-      wch:Math.min(40, Math.max(8,
-        ...aoa.map(row=>String(row[ci]||'').replace(/[\u3131-\uD7A3]/g,'aa').length)
-      ))
-    }));
-  }
-  ws1['!cols']=colWidths(rows1);
-  ws2['!cols']=colWidths(rows2);
-  /* 날짜·요일 2열 틀 고정 — 오른쪽으로 스크롤해도 날짜가 고정됨 */
-  ws1['!freeze']={xSplit:2,ySplit:1,topLeftCell:'C2',activePane:'bottomRight',state:'frozen'};
-  /* 학생별 집계는 이름 1열 고정 */
-  ws2['!freeze']={xSplit:1,ySplit:1,topLeftCell:'B2',activePane:'bottomRight',state:'frozen'};
-  XLSX.utils.book_append_sheet(wb,ws1,'일별 출석');
-  XLSX.utils.book_append_sheet(wb,ws2,'학생별 집계');
-  XLSX.writeFile(wb,'나린학원출석부_'+logMonth+'.xlsx');
+  /* 데이터 행 */
+  const ABSENT_FILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1EE'}};
+  const MK_FILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F0FA'}};
+  allDates.forEach(ds=>{
+    const day=att[ds]||{},wd=DAYS[new Date(ds+'T12:00:00').getDay()];
+    const rowData=[ds.slice(5).replace('-','/'),wd];
+    cols.forEach(st=>{
+      const r=day[st.id];
+      if(!r){rowData.push('','','','');return;}
+      if(r.status==='a'){rowData.push('','','결석',r.reason||'');return;}
+      rowData.push(r.in||'',r.out||'',r.mk?'보강':'정규',r.cleared?'(지움기록)':'');
+    });
+    const dr=ws1.addRow(rowData);
+    dr.eachCell(c=>{c.border=BD;c.alignment={horizontal:'center',vertical:'middle'};});
+    /* 날짜·요일 셀 스타일 */
+    dr.getCell(1).font={bold:true};dr.getCell(2).font={color:{argb:'FF8A9089'}};
+    /* 결석·보강 배경 */
+    cols.forEach((st,i)=>{
+      const r=day[st.id];if(!r)return;
+      const base=3+i*4;
+      if(r.status==='a')[0,1,2,3].forEach(j=>{dr.getCell(base+j).fill=ABSENT_FILL;});
+      else if(r.mk)[0,1,2,3].forEach(j=>{dr.getCell(base+j).fill=MK_FILL;});
+    });
+    dr.height=18;
+  });
+
+  /* ════════ 시트 2: 학생별 집계 ════════ */
+  const ws2=wb.addWorksheet('학생별 집계');
+  const hdr2=['이름','학교','학년','정규 출석','보강 출석','결석','기록 없는 수업일'];
+  const rh2=ws2.addRow(hdr2);
+  rh2.eachCell(c=>{c.fill=HDR_FILL;c.font=HDR_FONT;c.border=BD;c.alignment={horizontal:'center',vertical:'middle'};});
+  rh2.height=22;
+  ws2.views=[{state:'frozen',xSplit:1,ySplit:1,activeCell:'B2'}];
+  const w2=[14,14,8,10,10,8,14];hdr2.forEach((_,i)=>ws2.getColumn(i+1).width=w2[i]);
+
+  const allDs2=[];
+  for(let d=1;d<=dim;d++){const ds=logMonth+'-'+pad(d);if(att[ds])allDs2.push(ds);}
+  const NUM_FILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3E0'}};
+  cols.forEach(st=>{
+    let reg=0,mk=0,abs=0,none=0;
+    allDs2.forEach(ds=>{
+      const wd=new Date(ds+'T12:00:00').getDay(),isSchDay=!!(st.sched||{})[wd];
+      const r=(att[ds]||{})[st.id];
+      if(!r){if(isSchDay)none++;return;}
+      if(r.status==='a')abs++;else if(r.in&&r.mk)mk++;else if(r.in)reg++;
+    });
+    const dr2=ws2.addRow([st.name,st.school||'',st.grade||'',reg,mk,abs,none]);
+    dr2.eachCell(c=>{c.border=BD;c.alignment={horizontal:'center',vertical:'middle'};});
+    dr2.getCell(1).alignment={horizontal:'left',vertical:'middle'};
+    dr2.getCell(1).font={bold:true};
+    [4,5,6,7].forEach(i=>{dr2.getCell(i).fill=NUM_FILL;});
+    dr2.height=18;
+  });
+
+  /* ── 파일 저장 ── */
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='나린학원출석부_'+logMonth+'.xlsx';
+  a.click();
 }
 
 /* ──────────────── 학생 관리 ──────────────── */
@@ -794,15 +841,23 @@ async function bulkDel(){
 }
 
 /* ──────────────── 엑셀 일괄 등록 ──────────────── */
-function dlTemplate(){
-  const rows=[
-    {이름:'김민준',학교:'가양중',학년:'중1',뒷번호:'1234',월:'19:00',화:'',수:'19:00',목:'',금:'19:00',토:'',일:''},
-    {이름:'이서연',학교:'가양중',학년:'중1',뒷번호:'5678',월:'',화:'19:00',수:'',목:'19:00',금:'',토:'',일:''},
-    {이름:'박도현',학교:'나린고',학년:'고1',뒷번호:'9012',월:'',화:'',수:'',목:'',금:'19:30',토:'14:00',일:''}
+async function dlTemplate(){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('학생명단');
+  const HDR=['이름','학교','학년','뒷번호','월','화','수','목','금','토','일'];
+  const rh=ws.addRow(HDR);
+  rh.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7F4EC'}};c.font={bold:true};c.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};c.alignment={horizontal:'center'};});
+  const sample=[
+    ['김민준','가양중','중1','1234','19:00','','19:00','','19:00','',''],
+    ['이서연','가양중','중1','5678','','19:00','','19:00','','',''],
+    ['박도현','나린고','고1','9012','','','','','19:30','14:00','']
   ];
-  const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'학생명단');
-  XLSX.writeFile(wb,'나린학원_학생등록양식.xlsx');
+  sample.forEach(r=>{const dr=ws.addRow(r);dr.eachCell(c=>{c.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};c.alignment={horizontal:'center'};});});
+  const widths=[12,12,8,12,8,8,8,8,8,8,8];HDR.forEach((_,i)=>ws.getColumn(i+1).width=widths[i]);
+  const buf=await wb.xlsx.writeBuffer();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download='나린학원_학생등록양식.xlsx';a.click();
 }
 async function importExcel(){
   const f=$('#xlsFile')&&$('#xlsFile').files[0];
