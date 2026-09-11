@@ -671,6 +671,10 @@ async function exportCSV(){
   }
   ws1['!cols']=colWidths(rows1);
   ws2['!cols']=colWidths(rows2);
+  /* 날짜·요일 2열 틀 고정 — 오른쪽으로 스크롤해도 날짜가 고정됨 */
+  ws1['!freeze']={xSplit:2,ySplit:1,topLeftCell:'C2',activePane:'bottomRight',state:'frozen'};
+  /* 학생별 집계는 이름 1열 고정 */
+  ws2['!freeze']={xSplit:1,ySplit:1,topLeftCell:'B2',activePane:'bottomRight',state:'frozen'};
   XLSX.utils.book_append_sheet(wb,ws1,'일별 출석');
   XLSX.utils.book_append_sheet(wb,ws2,'학생별 집계');
   XLSX.writeFile(wb,'나린학원출석부_'+logMonth+'.xlsx');
