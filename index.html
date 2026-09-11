@@ -867,10 +867,40 @@ async function importExcel(){
   catch(e){uiAlert('파일을 읽지 못했습니다. .xlsx 또는 .csv 형식인지 확인해 주세요.');return;}
   if(!rows.length){uiAlert('데이터가 없습니다.');return;}
   const dayK={'월':1,'화':2,'수':3,'목':4,'금':5,'토':6,'일':0};
-  let added=0,skipped=0;const errs=[];
+  let added=0,skipped=0,saved=0;const errs=[];
   rows.forEach((r,i)=>{
     const name=String(r['이름']||'').trim();if(!name)return;
-    if(roster.students.some(s=>s.name===name)){skipped++;return;}
+    // 동명이인 구별: 이름 + 학교 + 학년이 모두 일치해야 같은 학생으로 봄
+    // 학교·학년이 둘 다 비어 있으면 이름만으로 판단 (정보가 없어 구별 불가)
+    const sc_new=String(r['학교']||'').trim();
+    const gr_new=String(r['학년']||'').trim();
+    const exist=roster.students.find(s=>{
+      if(s.name!==name)return false;
+      const noInfoBoth=(!sc_new&&!gr_new)&&(!s.school&&!s.grade);
+      if(noInfoBoth)return true;           // 양쪽 다 정보 없음 → 이름만으로 동일 판단
+      const scMatch=sc_new&&s.school?sc_new===s.school:(!sc_new&&!s.school);
+      const grMatch=gr_new&&s.grade?gr_new===s.grade:(!gr_new&&!s.grade);
+      return scMatch&&grMatch;             // 학교·학년이 일치해야 같은 학생
+    });
+    if(exist){
+      // 기존 학생과 병합 — 비어 있는 필드만 채워 넣기
+      let updated=false;
+      const ph_new=String(r['뒷번호']||'').replace(/\D/g,'');
+      if(sc_new&&!exist.school){exist.school=sc_new;updated=true;}
+      if(gr_new&&!exist.grade){exist.grade=gr_new;updated=true;}
+      if(ph_new&&!exist.phone){exist.phone=ph_new;updated=true;}
+      const newSched={};
+      Object.keys(dayK).forEach(k=>{const t=normTime(r[k]);if(t)newSched[dayK[k]]=t;});
+      Object.keys(newSched).forEach(d=>{
+        if(!exist.sched)exist.sched={};
+        if(!exist.sched[d]){exist.sched[d]=newSched[d];updated=true;}
+      });
+      if(updated)saved++;else skipped++;
+      return;
+    }
+    // 동명이인 경고 (학교·학년이 달라서 별개 학생으로 추가되는 경우)
+    const sameName=roster.students.filter(s=>s.name===name);
+    if(sameName.length>0)errs.push((i+2)+'행 '+name+': 동명이인으로 판단해 새 학생으로 추가 (학교: '+sc_new+'·학년: '+gr_new+')');
     const sched={};
     Object.keys(dayK).forEach(k=>{const t=normTime(r[k]);if(t)sched[dayK[k]]=t;
       else if(r[k]!==''&&r[k]!=null&&String(r[k]).trim()!=='')errs.push((i+2)+'행 '+k+'요일 형식 오류');});
@@ -881,7 +911,7 @@ async function importExcel(){
     roster.students.push(st);added++;
   });
   if(added){await saveRoster();renderManage();}
-  uiAlert('등록 완료: '+added+'명 추가'+(skipped?'<br>건너뜀(중복): '+skipped+'명':'')
+  uiAlert('등록 완료: '+added+'명 추가'+(saved?'<br>기존 학생 정보 보강: '+saved+'명':'')+(skipped?'<br>변경 없음(중복): '+skipped+'명':'')
     +(errs.length?'<br><small style="color:var(--muted)">'+errs.slice(0,5).join('<br>')+(errs.length>5?'<br>외 '+(errs.length-5)+'건':'')+'</small>':''));
 }
 
