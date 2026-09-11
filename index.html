@@ -244,9 +244,11 @@ function matchStudent(st,sl,qRaw){
   if((st.grade||'').includes(q))return true;
   if(sl && (sl.name||'').includes(q))return true;
   if(sl && (sl.time||'').includes(q))return true;
+  if(sl && sl.timeByDay && Object.values(sl.timeByDay).some(t=>String(t).includes(q)))return true;
   return false;
 }
 function hmToMin(hm){const p=String(hm||'0:0').split(':').map(Number);return p[0]*60+p[1];}
+function effTime(sl,wd){return (sl.timeByDay&&sl.timeByDay[wd])||sl.time;}   // 오늘 요일의 실제 시작 시간
 
 let db=null;
 let roster={slots:[]};
@@ -377,6 +379,7 @@ function drawToday(){
   const day=(attCache[monthKey(date)]||{})[date]||{};
   const slots=sortedSlots().map(sl=>({
     ...sl,
+    t:effTime(sl,wd),                                           // 오늘 요일의 실제 시작 시간
     today:sl.students,                                          // 보강 대응: 모든 학생을 매일 표시
     regular:sl.students.filter(st=>(st.days||[]).includes(wd))  // 오늘이 정규수업일인 학생
   })).filter(sl=>sl.today.length);
@@ -392,18 +395,18 @@ function drawToday(){
     <button class="btn ${showAllToday?'':'ghost'}" onclick="toggleAllToday()">${showAllToday?'👁 전체 보기 해제':'👁 관리자 전체 보기'}</button>
   </div>`;
 
-  const started=slots.filter(sl=>{const dm=nowMin-hmToMin(sl.time); return dm>=0&&dm<=60&&sl.regular.length;});
+  const started=slots.filter(sl=>{const dm=nowMin-hmToMin(sl.t); return dm>=0&&dm<=60&&sl.regular.length;});
   let miss='<div class="missBox"><b>📋 미등원 현황</b> <small style="color:var(--muted)">(정규 요일 기준 · 현재 시간 앞뒤 1시간)</small><br>';
   if(!started.length){
     miss+='<span class="later">아직 시작된 시간대가 없습니다. 수업 시작 시간이 지나면 여기에 표시됩니다.</span>';
   }else{
     started.forEach(sl=>{
       const not=sl.regular.filter(st=>{const r=day[st.id]||{}; return !r.in && r.status!=='a';});
-      miss+=`${sl.name} <small style="color:var(--muted)">(${sl.time})</small> — `;
+      miss+=`${sl.name} <small style="color:var(--muted)">(${sl.t})</small> — `;
       miss+=not.length?`<span class="miss">${not.map(s=>s.name).join(', ')}</span>`:'<span class="ok">전원 등원 ✓</span>';
       miss+='<br>';
     });
-    const pending=slots.filter(sl=>{const dm=hmToMin(sl.time)-nowMin; return dm>0&&dm<=60&&sl.regular.length;});
+    const pending=slots.filter(sl=>{const dm=hmToMin(sl.t)-nowMin; return dm>0&&dm<=60&&sl.regular.length;});
     if(pending.length) miss+=`<span class="later">${pending.map(p=>p.name).join(', ')} 시간대는 시작 전입니다.</span>`;
   }
   miss+='</div>';
@@ -411,10 +414,10 @@ function drawToday(){
   let html=searchBar+miss;
   html+='<div class="empty" id="noneNow" style="display:none">지금은 출석 체크 시간대가 아닙니다.<br>위 검색창에서 이름·초성·학교·번호로 학생을 찾아 기록할 수 있어요.</div>';
   slots.forEach(sl=>{
-    const winOn=Math.abs(nowMin-hmToMin(sl.time))<=15;   // 시간대 앞뒤 15분
+    const winOn=Math.abs(nowMin-hmToMin(sl.t))<=15;   // 시간대 앞뒤 15분 (오늘 요일 기준)
     const regArrived=sl.regular.filter(st=>(day[st.id]||{}).in).length;
     const extraArrived=sl.today.filter(st=>!(st.days||[]).includes(wd)&&(day[st.id]||{}).in).length;
-    const cnt=`${sl.time} · 정규 ${regArrived}/${sl.regular.length} 등원`+(extraArrived?` · 보강 ${extraArrived}명`:'');
+    const cnt=`${sl.t} · 정규 ${regArrived}/${sl.regular.length} 등원`+(extraArrived?` · 보강 ${extraArrived}명`:'');
     html+=`<section class="slotSec"><div class="slotHead">
       <h2>${sl.name}</h2><span class="cnt">${cnt}</span></div>
       <div class="grid">`+sl.today.map(st=>{
@@ -427,7 +430,7 @@ function drawToday(){
         else if(rec.in){seals='<span class="seal">출석</span>'; txt='등원 '+rec.in+'<br>탭하면 하원 기록';}
         else if(isReg){cls+=' notyet';}
         else{cls+=' extra'; txt='보강·추가 등원 시 탭';}
-        return `<div class="${cls}" data-name="${st.name}" data-cho="${chosung(st.name)}" data-school="${st.school||''}" data-phone="${st.phone||''}" data-slot="${sl.name}" data-time="${sl.time}" data-grade="${st.grade||''}" data-win="${winOn?'1':'0'}" onclick="tapStudent('${st.id}')">${tag}${seals}
+        return `<div class="${cls}" data-name="${st.name}" data-cho="${chosung(st.name)}" data-school="${st.school||''}" data-phone="${st.phone||''}" data-slot="${sl.name}" data-time="${sl.t}" data-grade="${st.grade||''}" data-win="${winOn?'1':'0'}" onclick="tapStudent('${st.id}')">${tag}${seals}
           <div class="nm">${st.name}</div><div class="st">${txt}</div>
           <button class="absBtn" onclick="event.stopPropagation();toggleAbsent('${st.id}')">${rec.status==='a'?'결석 취소':'결석'}</button>
         </div>`;
@@ -767,7 +770,7 @@ function renderManage(){
     :`<button class="btn ghost small" onclick="slotEditMode=true;selSlots.clear();renderManage()">🗂 시간대 편집 — 여러 개 선택해서 삭제</button>`)
     +`</div>`;
   html+=sortedSlots().map(sl=>`<div class="mgBox"${slotEditMode&&selSlots.has(sl.id)?' style="border:2px solid var(--seal)"':''}>
-    <h3>${slotEditMode?`<input type="checkbox" style="width:22px;height:22px;accent-color:var(--seal)" ${selSlots.has(sl.id)?'checked':''} onchange="toggleSelSlot('${sl.id}',this.checked)">`:''}${sl.name} <small style="color:var(--muted);font-family:'Gowun Dodum'">${sl.time}</small>
+    <h3>${slotEditMode?`<input type="checkbox" style="width:22px;height:22px;accent-color:var(--seal)" ${selSlots.has(sl.id)?'checked':''} onchange="toggleSelSlot('${sl.id}',this.checked)">`:''}${sl.name} <small style="color:var(--muted);font-family:'Gowun Dodum'">${sl.time}${sl.timeByDay?' · 요일별 상이':''}</small>
       <span class="sp"></span>
       <button class="btn ghost small" onclick="editSlot('${sl.id}')">이름·시간 수정</button>
       <button class="btn danger small" onclick="delSlot('${sl.id}')">삭제</button></h3>
@@ -791,10 +794,17 @@ function renderManage(){
 }
 function editSlot(id){
   const sl=slotById(id); if(!sl)return;
+  const tbd=sl.timeByDay||{};
+  const dayRows=[1,2,3,4,5,6,0].map(d=>
+    `<label><span class="lb">${DAYS[d]}요일</span><input type="time" id="est-${d}" value="${tbd[d]||''}"></label>`).join('');
   $('#modalHost').innerHTML=`<div class="ovl"><div class="modal">
     <div class="mtitle">시간대 수정</div>
     <label><span class="lb">이름</span><input type="text" id="esName" value="${sl.name}"></label>
-    <label><span class="lb">시간</span><input type="time" id="esTime" value="${sl.time}"></label>
+    <label><span class="lb">기본 시간</span><input type="time" id="esTime" value="${sl.time}"></label>
+    <p style="font-size:13px;color:var(--muted);margin:12px 0 2px;line-height:1.6">
+      <b>요일별 시간 (선택)</b> — 특정 요일만 시작 시간이 다르면 그 요일에만 입력하세요.<br>
+      비워둔 요일은 기본 시간을 따릅니다. 예: 금토반이 토요일만 14:00이면 토요일 칸에만 14:00.</p>
+    ${dayRows}
     <div class="mrow"><button class="btn ghost" id="esNo">취소</button>
     <button class="btn" id="esOk">저장</button></div></div></div>`;
   $('#esNo').onclick=()=>$('#modalHost').innerHTML='';
@@ -802,6 +812,12 @@ function editSlot(id){
     const nm=$('#esName').value.trim();
     if(!nm){uiAlert('이름을 입력해 주세요.');return;}
     sl.name=nm; sl.time=$('#esTime').value||sl.time;
+    const tb={};
+    [1,2,3,4,5,6,0].forEach(d=>{
+      const v=$('#est-'+d).value;
+      if(v && v!==sl.time) tb[d]=v;
+    });
+    if(Object.keys(tb).length) sl.timeByDay=tb; else delete sl.timeByDay;
     $('#modalHost').innerHTML='';
     await saveRoster(); renderManage();
   };
