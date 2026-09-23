@@ -874,33 +874,36 @@ async function importExcel(){
     // 학교·학년이 둘 다 비어 있으면 이름만으로 판단 (정보가 없어 구별 불가)
     const sc_new=String(r['학교']||'').trim();
     const gr_new=String(r['학년']||'').trim();
+    const ph_new=String(r['뒷번호']||'').replace(/\D/g,'');
+    // 새 시간표 파싱 (엑셀에 있는 요일 칸만)
+    const newSched={};
+    const hasAnyTime=Object.keys(dayK).some(k=>normTime(r[k]));
+    Object.keys(dayK).forEach(k=>{const t=normTime(r[k]);if(t)newSched[dayK[k]]=t;});
+
+    // 동명이인 구별: 이름+학교+학년 조합
     const exist=roster.students.find(s=>{
       if(s.name!==name)return false;
       const noInfoBoth=(!sc_new&&!gr_new)&&(!s.school&&!s.grade);
-      if(noInfoBoth)return true;           // 양쪽 다 정보 없음 → 이름만으로 동일 판단
+      if(noInfoBoth)return true;
       const scMatch=sc_new&&s.school?sc_new===s.school:(!sc_new&&!s.school);
       const grMatch=gr_new&&s.grade?gr_new===s.grade:(!gr_new&&!s.grade);
-      return scMatch&&grMatch;             // 학교·학년이 일치해야 같은 학생
+      return scMatch&&grMatch;
     });
     if(exist){
-      // 기존 학생과 병합 — 비어 있는 필드만 채워 넣기
-      let updated=false;
-      const ph_new=String(r['뒷번호']||'').replace(/\D/g,'');
-      if(sc_new&&!exist.school){exist.school=sc_new;updated=true;}
-      if(gr_new&&!exist.grade){exist.grade=gr_new;updated=true;}
-      if(ph_new&&!exist.phone){exist.phone=ph_new;updated=true;}
-      const newSched={};
-      Object.keys(dayK).forEach(k=>{const t=normTime(r[k]);if(t)newSched[dayK[k]]=t;});
-      Object.keys(newSched).forEach(d=>{
-        if(!exist.sched)exist.sched={};
-        if(!exist.sched[d]){exist.sched[d]=newSched[d];updated=true;}
-      });
-      if(updated)saved++;else skipped++;
+      // 최신 엑셀 데이터로 덮어쓰기
+      // 학교·학년·뒷번호: 엑셀에 값이 있으면 덮어쓰고, 없으면 기존 유지
+      if(sc_new)exist.school=sc_new; 
+      if(gr_new)exist.grade=gr_new;
+      if(ph_new)exist.phone=ph_new;
+      // 시간표: 엑셀에 요일 값이 하나라도 있으면 통째로 교체 (월수→화목 이동 대응)
+      //         엑셀에 요일 값이 하나도 없으면 기존 시간표 유지
+      if(hasAnyTime)exist.sched=newSched;
+      saved++;
       return;
     }
-    // 동명이인 경고 (학교·학년이 달라서 별개 학생으로 추가되는 경우)
+    // 동명이인 경고
     const sameName=roster.students.filter(s=>s.name===name);
-    if(sameName.length>0)errs.push((i+2)+'행 '+name+': 동명이인으로 판단해 새 학생으로 추가 (학교: '+sc_new+'·학년: '+gr_new+')');
+    if(sameName.length>0)errs.push((i+2)+'행 '+name+': 동명이인으로 판단해 새 학생으로 추가 (학교: '+sc_new+' · 학년: '+gr_new+')');
     const sched={};
     Object.keys(dayK).forEach(k=>{const t=normTime(r[k]);if(t)sched[dayK[k]]=t;
       else if(r[k]!==''&&r[k]!=null&&String(r[k]).trim()!=='')errs.push((i+2)+'행 '+k+'요일 형식 오류');});
